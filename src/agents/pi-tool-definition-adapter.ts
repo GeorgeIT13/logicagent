@@ -5,7 +5,12 @@ import type {
 } from "@mariozechner/pi-agent-core";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { ClientToolDefinition } from "./pi-embedded-runner/run/params.js";
-import { logDebug, logError } from "../logger.js";
+import { classifyAction, evaluateGate, parseAutonomyLevel } from "../autonomy/index.js";
+import { getGlobalAutonomyApprovalManager } from "../autonomy/approval-manager-global.js";
+import { DEFAULT_AUTONOMY_APPROVAL_TIMEOUT_MS } from "../autonomy/approval-manager.js";
+import { checkAutoApproveRule, addAutoApproveRule } from "../autonomy/auto-approve-rules.js";
+import { loadConfig } from "../config/io.js";
+import { logDebug, logError, logInfo } from "../logger.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import { isPlainObject } from "../utils.js";
 import {
@@ -59,6 +64,17 @@ function describeToolExecutionError(err: unknown): {
   return { message: String(err) };
 }
 
+/** Build a truncated JSON summary of tool params for the approval record. */
+function summarizeParams(params: unknown, maxLen = 500): string {
+  if (params === undefined || params === null) return "";
+  try {
+    const json = JSON.stringify(params);
+    return json.length > maxLen ? `${json.slice(0, maxLen)}…` : json;
+  } catch {
+    return String(params).slice(0, maxLen);
+  }
+}
+
 function splitToolExecuteArgs(args: ToolExecuteArgsAny): {
   toolCallId: string;
   params: unknown;
@@ -108,6 +124,84 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             }
             executeParams = hookOutcome.params;
           }
+
+          // Autonomy Gate (Layer 1): evaluate whether this tool call is allowed
+          const config = loadConfig();
+          const autonomyLevel = parseAutonomyLevel(config.autonomy?.level);
+          const actionTier = classifyAction(
+            normalizedName,
+            isPlainObject(executeParams) ? executeParams : undefined,
+          );
+
+          // Check persistent auto-approve rules before evaluating the policy matrix
+          const autoApproveRule = checkAutoApproveRule(normalizedName, actionTier);
+          if (autoApproveRule) {
+            logDebug(
+              `[autonomy-gate] Auto-approved via rule ${autoApproveRule.id}: ${normalizedName} (${actionTier})`,
+            );
+            // Rule matched — skip gate evaluation entirely
+          } else {
+            const gateResult = evaluateGate(
+              autonomyLevel,
+              actionTier,
+              undefined,
+              config.autonomy?.confidenceThreshold,
+            );
+            if (gateResult.decision === "denied") {
+              throw new Error(`[autonomy-gate] Denied: ${gateResult.reason}`);
+            }
+            if (gateResult.decision === "needs_approval") {
+              const approvalManager = getGlobalAutonomyApprovalManager();
+              if (!approvalManager) {
+                // Manager not initialized (e.g. running outside gateway context).
+                // Fail open with a warning — matches pre-existing behavior.
+                logInfo(
+                  `[autonomy-gate] Approval needed for ${normalizedName} (${actionTier}): ${gateResult.reason} (no approval manager — proceeding)`,
+                );
+              } else {
+                const timeoutMs =
+                  config.autonomy?.approvalTimeoutMs ?? DEFAULT_AUTONOMY_APPROVAL_TIMEOUT_MS;
+
+                // Build a truncated params summary for the approval record
+                const paramsSummary = summarizeParams(executeParams);
+
+                const record = approvalManager.create(
+                  {
+                    toolName: normalizedName,
+                    paramsSummary,
+                    tier: actionTier,
+                    level: autonomyLevel,
+                    gateReason: gateResult.reason,
+                    confidence: gateResult.confidence,
+                  },
+                  timeoutMs,
+                );
+
+                logInfo(
+                  `[autonomy-gate] Approval needed for ${normalizedName} (${actionTier}): ${gateResult.reason} — queued as ${record.id}`,
+                );
+
+                const decision = await approvalManager.register(record, timeoutMs);
+
+                if (decision === "allow-once") {
+                  logInfo(`[autonomy-gate] Approved (once) ${record.id}: ${normalizedName}`);
+                } else if (decision === "allow-always") {
+                  logInfo(
+                    `[autonomy-gate] Approved (always) ${record.id}: ${normalizedName} — adding persistent rule`,
+                  );
+                  addAutoApproveRule(normalizedName, actionTier);
+                } else {
+                  // null (timeout) or "deny"
+                  const reason =
+                    decision === "deny"
+                      ? `User denied tool call ${normalizedName}`
+                      : `Approval timed out for tool call ${normalizedName}`;
+                  throw new Error(`[autonomy-gate] ${reason}`);
+                }
+              }
+            }
+          }
+
           const result = await tool.execute(toolCallId, executeParams, signal, onUpdate);
           const afterParams = beforeHookWrapped
             ? (consumeAdjustedParamsForToolCall(toolCallId) ?? executeParams)

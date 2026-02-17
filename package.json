@@ -1,19 +1,20 @@
 {
-  "name": "openclaw",
-  "version": "2026.2.16",
-  "description": "Multi-channel AI gateway with extensible messaging integrations",
+  "name": "logic-agent",
+  "version": "0.1.0",
+  "description": "Cloud-native self-bootstrapping autonomous agent with vector-powered intelligence",
   "keywords": [],
-  "homepage": "https://github.com/openclaw/openclaw#readme",
+  "homepage": "https://github.com/logic-agent/logic-agent#readme",
   "bugs": {
-    "url": "https://github.com/openclaw/openclaw/issues"
+    "url": "https://github.com/logic-agent/logic-agent/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openclaw/openclaw.git"
+    "url": "git+https://github.com/logic-agent/logic-agent.git"
   },
   "bin": {
+    "logic-agent": "logic-agent.mjs",
     "openclaw": "openclaw.mjs"
   },
   "directories": {
@@ -23,6 +24,7 @@
   "files": [
     "CHANGELOG.md",
     "LICENSE",
+    "logic-agent.mjs",
     "openclaw.mjs",
     "README-header.png",
     "README.md",
@@ -44,7 +46,7 @@
       "types": "./dist/plugin-sdk/account-id.d.ts",
       "default": "./dist/plugin-sdk/account-id.js"
     },
-    "./cli-entry": "./openclaw.mjs"
+    "./cli-entry": "./logic-agent.mjs"
   },
   "scripts": {
     "android:assemble": "cd apps/android && ./gradlew :app:assembleDebug",
@@ -85,7 +87,9 @@
     "mac:package": "bash scripts/package-mac-app.sh",
     "mac:restart": "bash scripts/restart-mac.sh",
     "moltbot:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
+    "logic-agent": "node scripts/run-node.mjs",
     "openclaw": "node scripts/run-node.mjs",
+    "logic-agent:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
     "openclaw:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
     "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
     "prepack": "pnpm build && pnpm ui:build",

@@ -26,6 +26,8 @@ const BASE_METHODS = [
   "exec.approval.request",
   "exec.approval.waitDecision",
   "exec.approval.resolve",
+  "autonomy.approval.resolve",
+  "autonomy.approval.list",
   "wizard.start",
   "wizard.next",
   "wizard.cancel",
@@ -116,4 +118,5 @@ export const GATEWAY_EVENTS = [
   "voicewake.changed",
   "exec.approval.requested",
   "exec.approval.resolved",
+  "autonomy.approval.resolved",
 ];

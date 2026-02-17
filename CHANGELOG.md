@@ -1,6 +1,21 @@
 # Changelog
 
-Docs: https://docs.openclaw.ai
+## Logic Agent 0.1.0 (Unreleased)
+
+Logic Agent is a fork of [OpenClaw](https://github.com/openclaw/openclaw).
+All OpenClaw history is preserved below. See [ATTRIBUTION.md](ATTRIBUTION.md).
+
+### Changes
+
+- Project rebranded from OpenClaw to Logic Agent
+- Added Autonomy Gate (Layer 1) — configurable per-user trust levels that gate tool execution
+- New `autonomy.level` config key (low / medium / high, default: low)
+
+---
+
+## OpenClaw Changelog (Pre-Fork History)
+
+Original docs: https://docs.openclaw.ai
 
 ## 2026.2.16 (Unreleased)
 

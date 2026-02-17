@@ -97,6 +97,14 @@ export type OpenClawConfig = {
   talk?: TalkConfig;
   gateway?: GatewayConfig;
   memory?: MemoryConfig;
+  autonomy?: {
+    /** User autonomy level for the Autonomy Gate (Layer 1). Default: "low". */
+    level?: "low" | "medium" | "high";
+    /** Confidence threshold (0-1). Actions below this force approval regardless of level. Default: 0.7. */
+    confidenceThreshold?: number;
+    /** Timeout for pending approval requests in milliseconds. Default: 120000. */
+    approvalTimeoutMs?: number;
+  };
 };
 
 export type ConfigValidationIssue = {

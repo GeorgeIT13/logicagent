@@ -559,6 +559,14 @@ export const OpenClawSchema = z
       .strict()
       .optional(),
     memory: MemorySchema,
+    autonomy: z
+      .object({
+        level: z.union([z.literal("low"), z.literal("medium"), z.literal("high")]).optional(),
+        confidenceThreshold: z.number().min(0).max(1).optional(),
+        approvalTimeoutMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     skills: z
       .object({
         allowBundled: z.array(z.string()).optional(),

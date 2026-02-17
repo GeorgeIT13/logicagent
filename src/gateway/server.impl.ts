@@ -29,6 +29,8 @@ import {
 } from "../infra/control-ui-assets.js";
 import { isDiagnosticsEnabled } from "../infra/diagnostic-events.js";
 import { logAcceptedEnvOption } from "../infra/env.js";
+import { createAutonomyApprovalForwarder } from "../autonomy/approval-forwarder.js";
+import { initializeGlobalAutonomyApprovalManager } from "../autonomy/approval-manager-global.js";
 import { createExecApprovalForwarder } from "../infra/exec-approval-forwarder.js";
 import { onHeartbeatEvent } from "../infra/heartbeat-events.js";
 import { startHeartbeatRunner, type HeartbeatRunner } from "../infra/heartbeat-runner.js";
@@ -60,6 +62,7 @@ import { applyGatewayLaneConcurrency } from "./server-lanes.js";
 import { startGatewayMaintenanceTimers } from "./server-maintenance.js";
 import { GATEWAY_EVENTS, listGatewayMethods } from "./server-methods-list.js";
 import { coreGatewayHandlers } from "./server-methods.js";
+import { createAutonomyApprovalHandlers } from "./server-methods/autonomy-approval.js";
 import { createExecApprovalHandlers } from "./server-methods/exec-approval.js";
 import { safeParseJson } from "./server-methods/nodes.helpers.js";
 import { hasConnectedMobileNode } from "./server-mobile-nodes.js";
@@ -526,6 +529,14 @@ export async function startGatewayServer(
     forwarder: execApprovalForwarder,
   });
 
+  // Autonomy Gate approval pipeline
+  const autonomyApprovalManager = initializeGlobalAutonomyApprovalManager();
+  const autonomyApprovalForwarder = createAutonomyApprovalForwarder();
+  const autonomyApprovalHandlers = createAutonomyApprovalHandlers(
+    autonomyApprovalManager,
+    { forwarder: autonomyApprovalForwarder },
+  );
+
   const canvasHostServerPort = (canvasHostServer as CanvasHostServer | null)?.port;
 
   attachGatewayWsHandlers({
@@ -545,6 +556,7 @@ export async function startGatewayServer(
     extraHandlers: {
       ...pluginRegistry.gatewayHandlers,
       ...execApprovalHandlers,
+      ...autonomyApprovalHandlers,
     },
     broadcast,
     context: {

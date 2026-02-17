@@ -74,6 +74,10 @@ apps/ios/*.mobileprovision
 docs/.local/
 IDENTITY.md
 USER.md
+
+# Private local planning docs (never push to public repo)
+/local-docs/
+/plan.md
 .tgz
 .idea
 

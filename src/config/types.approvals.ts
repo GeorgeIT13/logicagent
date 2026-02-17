@@ -24,6 +24,10 @@ export type ExecApprovalForwardingConfig = {
   targets?: ExecApprovalForwardTarget[];
 };
 
+/** Forwarding config for autonomy gate approvals. Same shape as exec. */
+export type AutonomyApprovalForwardingConfig = ExecApprovalForwardingConfig;
+
 export type ApprovalsConfig = {
   exec?: ExecApprovalForwardingConfig;
+  autonomy?: AutonomyApprovalForwardingConfig;
 };
