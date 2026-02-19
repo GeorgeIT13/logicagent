@@ -163,6 +163,17 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        reasoningTrace: z
+          .object({
+            enabled: z.boolean().optional(),
+            baseDir: z.string().optional(),
+            includeContext: z.boolean().optional(),
+            includeReasoning: z.boolean().optional(),
+            maxResultLength: z.number().int().nonnegative().optional(),
+            retentionDays: z.number().int().nonnegative().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

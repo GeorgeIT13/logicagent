@@ -12,6 +12,8 @@ import { checkAutoApproveRule, addAutoApproveRule } from "../autonomy/auto-appro
 import { recordApprovalOutcome } from "../autonomy/progression.js";
 import { loadConfig } from "../config/io.js";
 import { logDebug, logError, logInfo, logWarn } from "../logger.js";
+import { getActiveTraceContext } from "../reasoning-tracer/active-context.js";
+import { mapActionTierToClassification } from "../reasoning-tracer/classification.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import {
   FilesystemBoundary,
@@ -156,12 +158,21 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
           );
 
           // Check persistent auto-approve rules before evaluating the policy matrix
+          const traceCtx = getActiveTraceContext();
+          const traceClassification = mapActionTierToClassification(actionTier);
           const autoApproveRule = checkAutoApproveRule(normalizedName, actionTier);
           if (autoApproveRule) {
             logDebug(
               `[autonomy-gate] Auto-approved via rule ${autoApproveRule.id}: ${normalizedName} (${actionTier})`,
             );
-            // Rule matched — skip gate evaluation entirely
+            traceCtx?.recordGateDecision({
+              tool: normalizedName,
+              tier: actionTier,
+              classification: traceClassification,
+              decision: "auto_approve",
+              approvalRequired: false,
+              approvalOutcome: "auto-approved",
+            });
           } else {
             const gateResult = evaluateGate(
               autonomyLevel,
@@ -170,6 +181,14 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
               config.autonomy?.confidenceThreshold,
             );
             if (gateResult.decision === "denied") {
+              traceCtx?.recordGateDecision({
+                tool: normalizedName,
+                tier: actionTier,
+                classification: traceClassification,
+                decision: "denied",
+                confidence: gateResult.confidence,
+                approvalRequired: false,
+              });
               throw new Error(`[autonomy-gate] Denied: ${gateResult.reason}`);
             }
             if (gateResult.decision === "needs_approval") {
@@ -180,6 +199,15 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
                 logInfo(
                   `[autonomy-gate] Approval needed for ${normalizedName} (${actionTier}): ${gateResult.reason} (no approval manager — proceeding)`,
                 );
+                traceCtx?.recordGateDecision({
+                  tool: normalizedName,
+                  tier: actionTier,
+                  classification: traceClassification,
+                  decision: "needs_approval",
+                  confidence: gateResult.confidence,
+                  approvalRequired: true,
+                  approvalOutcome: "approved",
+                });
               } else {
                 const timeoutMs =
                   config.autonomy?.approvalTimeoutMs ?? DEFAULT_AUTONOMY_APPROVAL_TIMEOUT_MS;
@@ -195,6 +223,7 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
                     level: autonomyLevel,
                     gateReason: gateResult.reason,
                     confidence: gateResult.confidence,
+                    traceId: traceCtx?.traceId,
                   },
                   timeoutMs,
                 );
@@ -208,15 +237,42 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
                 if (decision === "allow-once") {
                   logInfo(`[autonomy-gate] Approved (once) ${record.id}: ${normalizedName}`);
                   recordApprovalOutcome(true);
+                  traceCtx?.recordGateDecision({
+                    tool: normalizedName,
+                    tier: actionTier,
+                    classification: traceClassification,
+                    decision: "needs_approval",
+                    confidence: gateResult.confidence,
+                    approvalRequired: true,
+                    approvalOutcome: "approved",
+                  });
                 } else if (decision === "allow-always") {
                   logInfo(
                     `[autonomy-gate] Approved (always) ${record.id}: ${normalizedName} — adding persistent rule`,
                   );
                   addAutoApproveRule(normalizedName, actionTier);
                   recordApprovalOutcome(true);
+                  traceCtx?.recordGateDecision({
+                    tool: normalizedName,
+                    tier: actionTier,
+                    classification: traceClassification,
+                    decision: "needs_approval",
+                    confidence: gateResult.confidence,
+                    approvalRequired: true,
+                    approvalOutcome: "approved",
+                  });
                 } else {
                   // null (timeout) or "deny"
                   recordApprovalOutcome(false);
+                  traceCtx?.recordGateDecision({
+                    tool: normalizedName,
+                    tier: actionTier,
+                    classification: traceClassification,
+                    decision: "needs_approval",
+                    confidence: gateResult.confidence,
+                    approvalRequired: true,
+                    approvalOutcome: "rejected",
+                  });
                   const reason =
                     decision === "deny"
                       ? `User denied tool call ${normalizedName}`
@@ -224,6 +280,17 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
                   throw new Error(`[autonomy-gate] ${reason}`);
                 }
               }
+            } else {
+              // auto_approve path
+              traceCtx?.recordGateDecision({
+                tool: normalizedName,
+                tier: actionTier,
+                classification: traceClassification,
+                decision: "auto_approve",
+                confidence: gateResult.confidence,
+                approvalRequired: false,
+                approvalOutcome: "auto-approved",
+              });
             }
           }
 
@@ -258,6 +325,9 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
               };
             }
           }
+
+          // Reasoning Tracer: record successful tool execution
+          traceCtx?.recordToolOutcome({ tool: normalizedName, success: true });
 
           // Call after_tool_call hook
           const hookRunner = getGlobalHookRunner();
@@ -298,6 +368,13 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             logDebug(`tools: ${normalizedName} failed stack:\n${described.stack}`);
           }
           logError(`[tools] ${normalizedName} failed: ${described.message}`);
+
+          // Reasoning Tracer: record failed tool execution
+          getActiveTraceContext()?.recordToolOutcome({
+            tool: normalizedName,
+            success: false,
+            error: described.message,
+          });
 
           const errorResult = jsonResult({
             status: "error",

@@ -27,6 +27,10 @@ import {
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-events.js";
+import type { TraceContext } from "../../reasoning-tracer/types.js";
+import { createReasoningTracer } from "../../reasoning-tracer/tracer.js";
+import { setActiveTraceContext } from "../../reasoning-tracer/active-context.js";
+import { parseAutonomyLevel } from "../../autonomy/index.js";
 import { defaultRuntime } from "../../runtime.js";
 import {
   isMarkdownCapableMessageChannel,
@@ -48,6 +52,8 @@ export type AgentRunLoopResult =
       autoCompactionCompleted: boolean;
       /** Payload keys sent directly (not via pipeline) during tool flush. */
       directlySentBlockKeys?: Set<string>;
+      /** Active reasoning trace context — available for gate integration. */
+      traceContext?: TraceContext;
     }
   | { kind: "final"; payload: ReplyPayload };
 
@@ -99,6 +105,17 @@ export async function runAgentTurnWithFallback(params: {
   let fallbackModel = params.followupRun.run.model;
   let didResetAfterCompactionFailure = false;
   let didRetryTransientHttpError = false;
+
+  // Reasoning Tracer: start a decision trace for this agent turn.
+  const tracer = createReasoningTracer(params.followupRun.run.config);
+  const traceContext = tracer?.startDecision({
+    userMessage: params.commandBody,
+    sessionId: params.followupRun.run.sessionId,
+    sessionKey: params.sessionKey,
+    agentId: params.followupRun.run.agentId,
+    autonomyLevel: parseAutonomyLevel(params.followupRun.run.config?.autonomy?.level),
+  });
+  setActiveTraceContext(traceContext);
 
   while (true) {
     try {
@@ -446,6 +463,14 @@ export async function runAgentTurnWithFallback(params: {
         }
       }
 
+      // Reasoning Tracer: finalize on success
+      const hasError = !!runResult.meta?.error;
+      traceContext?.finalize({
+        success: !hasError,
+        error: hasError ? runResult.meta?.error?.message : undefined,
+      });
+      setActiveTraceContext(undefined);
+
       break;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -551,6 +576,10 @@ export async function runAgentTurnWithFallback(params: {
           ? "⚠️ Message ordering conflict - please try again. If this persists, use /new to start a fresh session."
           : `⚠️ Agent failed before reply: ${trimmedMessage}.\nLogs: openclaw logs --follow`;
 
+      // Reasoning Tracer: finalize on terminal error
+      traceContext?.finalize({ success: false, error: message });
+      setActiveTraceContext(undefined);
+
       return {
         kind: "final",
         payload: {
@@ -568,5 +597,6 @@ export async function runAgentTurnWithFallback(params: {
     didLogHeartbeatStrip,
     autoCompactionCompleted,
     directlySentBlockKeys: directlySentBlockKeys.size > 0 ? directlySentBlockKeys : undefined,
+    traceContext,
   };
 }

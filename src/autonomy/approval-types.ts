@@ -42,6 +42,8 @@ export type AutonomyApprovalRequestPayload = {
   agentId?: string | null;
   /** Session key for the conversation that triggered this action. */
   sessionKey?: string | null;
+  /** Reasoning trace ID for bidirectional trace-gate linkage. */
+  traceId?: string | null;
 };
 
 // ---------------------------------------------------------------------------

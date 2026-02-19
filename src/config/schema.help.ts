@@ -56,6 +56,18 @@ export const FIELD_HELP: Record<string, string> = {
     "Include full message payloads in trace output (default: true).",
   "diagnostics.cacheTrace.includePrompt": "Include prompt text in trace output (default: true).",
   "diagnostics.cacheTrace.includeSystem": "Include system prompt in trace output (default: true).",
+  "diagnostics.reasoningTrace.enabled":
+    "Enable reasoning trace capture for every agent decision (default: false).",
+  "diagnostics.reasoningTrace.baseDir":
+    "Base directory for reasoning trace JSONL files (default: $STATE_DIR/traces).",
+  "diagnostics.reasoningTrace.includeContext":
+    "Include context snapshots (tools, autonomy level, user model ref) in traces (default: true).",
+  "diagnostics.reasoningTrace.includeReasoning":
+    "Include LLM reasoning text in traces (default: true).",
+  "diagnostics.reasoningTrace.maxResultLength":
+    "Maximum character length for outcome.result in traces (default: 2000).",
+  "diagnostics.reasoningTrace.retentionDays":
+    "Auto-cleanup trace files older than this many days (0 = no cleanup).",
   "tools.exec.applyPatch.enabled":
     "Experimental. Enables apply_patch for OpenAI models when allowed by tool policy.",
   "tools.exec.applyPatch.workspaceOnly":

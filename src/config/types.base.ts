@@ -158,12 +158,22 @@ export type DiagnosticsCacheTraceConfig = {
   includeSystem?: boolean;
 };
 
+export type DiagnosticsReasoningTraceConfig = {
+  enabled?: boolean;
+  baseDir?: string;
+  includeContext?: boolean;
+  includeReasoning?: boolean;
+  maxResultLength?: number;
+  retentionDays?: number;
+};
+
 export type DiagnosticsConfig = {
   enabled?: boolean;
   /** Optional ad-hoc diagnostics flags (e.g. "telegram.http"). */
   flags?: string[];
   otel?: DiagnosticsOtelConfig;
   cacheTrace?: DiagnosticsCacheTraceConfig;
+  reasoningTrace?: DiagnosticsReasoningTraceConfig;
 };
 
 export type WebReconnectConfig = {
