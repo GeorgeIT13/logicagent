@@ -104,6 +104,42 @@ export type OpenClawConfig = {
     confidenceThreshold?: number;
     /** Timeout for pending approval requests in milliseconds. Default: 120000. */
     approvalTimeoutMs?: number;
+    /** Autonomy progression settings — agent proposes level increases based on track record. */
+    progression?: {
+      enabled?: boolean;
+      /** Minimum total approvals before proposing an upgrade. Default: 50. */
+      minApprovals?: number;
+      /** Minimum approval rate (0-1) required. Default: 0.95. */
+      minApprovalRate?: number;
+      /** Cooldown between proposals in days. Default: 7. */
+      cooldownDays?: number;
+    };
+  };
+  security?: {
+    /** Filesystem access boundaries for agent tools. */
+    filesystem?: {
+      /** Directories the agent can read. Default: ["~"]. */
+      readable?: string[];
+      /** Directories the agent can write. Default: ["~/.openclaw/"]. */
+      writable?: string[];
+      /** Directories always denied. Default: ["~/.ssh/", "~/.gnupg/", "~/.aws/"]. */
+      denied?: string[];
+    };
+    /** Controls what data can be sent to external APIs. */
+    dataFlow?: {
+      /** Allowed LLM/embedding provider identifiers. Empty = all allowed. */
+      allowedProviders?: string[];
+      /** Additional regex patterns to redact from outbound data. */
+      redactionPatterns?: string[];
+    };
+    /** Additional regex patterns for sensitive data detection. */
+    sensitivePatterns?: string[];
+    /** Output scanning configuration. */
+    outputScanning?: {
+      enabled?: boolean;
+      /** System prompt fragments to detect if echoed in output. */
+      systemPromptFragments?: string[];
+    };
   };
 };
 

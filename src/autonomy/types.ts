@@ -57,3 +57,17 @@ export interface ToolAutonomyHint {
   /** Optional human-readable reason for the classification. */
   reason?: string;
 }
+
+/**
+ * Declared access scope for a tool. The Autonomy Gate enforces these scopes
+ * at execution time — a tool cannot exceed its declared scope even if the
+ * global security config allows broader access.
+ */
+export interface ToolAccessScope {
+  /** Filesystem paths this tool is allowed to access (resolved with ~ expansion). */
+  filesystemPaths?: string[];
+  /** Network endpoints (hostnames or URL patterns) this tool may contact. */
+  networkEndpoints?: string[];
+  /** Data categories this tool handles: "code", "text", "user-data", "metadata". */
+  dataCategories?: string[];
+}

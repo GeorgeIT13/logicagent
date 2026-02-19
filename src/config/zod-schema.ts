@@ -564,6 +564,43 @@ export const OpenClawSchema = z
         level: z.union([z.literal("low"), z.literal("medium"), z.literal("high")]).optional(),
         confidenceThreshold: z.number().min(0).max(1).optional(),
         approvalTimeoutMs: z.number().int().positive().optional(),
+        progression: z
+          .object({
+            enabled: z.boolean().optional(),
+            minApprovals: z.number().int().positive().optional(),
+            minApprovalRate: z.number().min(0).max(1).optional(),
+            cooldownDays: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    security: z
+      .object({
+        filesystem: z
+          .object({
+            readable: z.array(z.string()).optional(),
+            writable: z.array(z.string()).optional(),
+            denied: z.array(z.string()).optional(),
+          })
+          .strict()
+          .optional(),
+        dataFlow: z
+          .object({
+            allowedProviders: z.array(z.string()).optional(),
+            redactionPatterns: z.array(z.string()).optional(),
+          })
+          .strict()
+          .optional(),
+        sensitivePatterns: z.array(z.string()).optional(),
+        outputScanning: z
+          .object({
+            enabled: z.boolean().optional(),
+            systemPromptFragments: z.array(z.string()).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

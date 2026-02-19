@@ -9,9 +9,15 @@ import { classifyAction, evaluateGate, parseAutonomyLevel } from "../autonomy/in
 import { getGlobalAutonomyApprovalManager } from "../autonomy/approval-manager-global.js";
 import { DEFAULT_AUTONOMY_APPROVAL_TIMEOUT_MS } from "../autonomy/approval-manager.js";
 import { checkAutoApproveRule, addAutoApproveRule } from "../autonomy/auto-approve-rules.js";
+import { recordApprovalOutcome } from "../autonomy/progression.js";
 import { loadConfig } from "../config/io.js";
-import { logDebug, logError, logInfo } from "../logger.js";
+import { logDebug, logError, logInfo, logWarn } from "../logger.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
+import {
+  FilesystemBoundary,
+  validateToolFilesystemAccess,
+} from "../security/filesystem-boundary.js";
+import { sanitizeToolOutput } from "../security/tool-output-sanitizer.js";
 import { isPlainObject } from "../utils.js";
 import {
   consumeAdjustedParamsForToolCall,
@@ -125,8 +131,24 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             executeParams = hookOutcome.params;
           }
 
-          // Autonomy Gate (Layer 1): evaluate whether this tool call is allowed
+          // Filesystem Boundary (Layer 0): block access to denied/out-of-scope paths
           const config = loadConfig();
+          if (isPlainObject(executeParams)) {
+            const boundary = new FilesystemBoundary(config.security?.filesystem);
+            const fsCheck = validateToolFilesystemAccess(
+              normalizedName,
+              executeParams,
+              boundary,
+            );
+            if (fsCheck && !fsCheck.allowed) {
+              logWarn(
+                `[fs-boundary] Blocked ${normalizedName}: ${fsCheck.reason}`,
+              );
+              throw new Error(`[fs-boundary] ${fsCheck.reason}`);
+            }
+          }
+
+          // Autonomy Gate (Layer 1): evaluate whether this tool call is allowed
           const autonomyLevel = parseAutonomyLevel(config.autonomy?.level);
           const actionTier = classifyAction(
             normalizedName,
@@ -185,13 +207,16 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
 
                 if (decision === "allow-once") {
                   logInfo(`[autonomy-gate] Approved (once) ${record.id}: ${normalizedName}`);
+                  recordApprovalOutcome(true);
                 } else if (decision === "allow-always") {
                   logInfo(
                     `[autonomy-gate] Approved (always) ${record.id}: ${normalizedName} — adding persistent rule`,
                   );
                   addAutoApproveRule(normalizedName, actionTier);
+                  recordApprovalOutcome(true);
                 } else {
                   // null (timeout) or "deny"
+                  recordApprovalOutcome(false);
                   const reason =
                     decision === "deny"
                       ? `User denied tool call ${normalizedName}`
@@ -202,10 +227,37 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             }
           }
 
-          const result = await tool.execute(toolCallId, executeParams, signal, onUpdate);
+          let result = await tool.execute(toolCallId, executeParams, signal, onUpdate);
           const afterParams = beforeHookWrapped
             ? (consumeAdjustedParamsForToolCall(toolCallId) ?? executeParams)
             : executeParams;
+
+          // Tool output sanitization: strip injection patterns before re-entering context
+          if (result && typeof result === "object" && "output" in result) {
+            const outputStr =
+              typeof result.output === "string"
+                ? result.output
+                : JSON.stringify(result.output);
+            const sanitization = sanitizeToolOutput(
+              outputStr,
+              normalizedName,
+              config.security?.sensitivePatterns,
+            );
+            if (sanitization.modified) {
+              logDebug(
+                `[tool-sanitizer] Sanitized output of ${normalizedName}: ` +
+                  `injections=${sanitization.injectionPatterns.length}, ` +
+                  `sensitiveData=${sanitization.hasSensitiveData}`,
+              );
+              result = {
+                ...result,
+                output:
+                  typeof result.output === "string"
+                    ? sanitization.sanitized
+                    : JSON.parse(sanitization.sanitized),
+              };
+            }
+          }
 
           // Call after_tool_call hook
           const hookRunner = getGlobalHookRunner();

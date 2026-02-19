@@ -2,7 +2,11 @@
 export {
   classifyAction,
   getClassificationMap,
+  getScopeMap,
+  getToolScope,
+  registerToolScope,
   registerToolTier,
+  unregisterToolScope,
   unregisterToolTier,
 } from "./classifier.js";
 
@@ -40,6 +44,7 @@ export type {
   AutonomyPolicy,
   GateDecision,
   GateEvaluation,
+  ToolAccessScope,
   ToolAutonomyHint,
 } from "./types.js";
 
@@ -53,3 +58,12 @@ export type {
   AutonomyAutoApproveFile,
   AutonomyAutoApproveRule,
 } from "./approval-types.js";
+
+// Progression
+export {
+  markProposalSurfaced,
+  recordApprovalOutcome,
+  resetProgressionStats,
+  shouldProposeUpgrade,
+} from "./progression.js";
+export type { ProgressionConfig, ProgressionProposal } from "./progression.js";

@@ -5,7 +5,7 @@
  * Tools can also self-declare their tier via ToolAutonomyHint.
  */
 
-import type { ActionTier, ToolAutonomyHint } from "./types.js";
+import type { ActionTier, ToolAccessScope, ToolAutonomyHint } from "./types.js";
 
 /**
  * Default classification registry. Maps tool names to their action tier.
@@ -117,6 +117,65 @@ export function getClassificationMap(): ReadonlyMap<string, ActionTier> {
   const merged = new Map(TOOL_TIER_MAP);
   for (const [name, tier] of runtimeOverrides) {
     merged.set(name, tier);
+  }
+  return merged;
+}
+
+// ---------------------------------------------------------------------------
+// Per-tool access scoping
+// ---------------------------------------------------------------------------
+
+/**
+ * Default access scopes for built-in tools. Tools not listed here have no
+ * scope restriction beyond the global security config.
+ */
+const TOOL_SCOPE_MAP = new Map<string, ToolAccessScope>([
+  ["read", { filesystemPaths: ["~"], dataCategories: ["code", "text"] }],
+  ["grep", { filesystemPaths: ["~"], dataCategories: ["code", "text"] }],
+  ["find", { filesystemPaths: ["~"], dataCategories: ["metadata"] }],
+  ["ls", { filesystemPaths: ["~"], dataCategories: ["metadata"] }],
+  ["write", { filesystemPaths: ["~"], dataCategories: ["code", "text"] }],
+  ["edit", { filesystemPaths: ["~"], dataCategories: ["code", "text"] }],
+  ["apply_patch", { filesystemPaths: ["~"], dataCategories: ["code", "text"] }],
+  ["web_search", { networkEndpoints: ["*"], dataCategories: ["text"] }],
+  ["web_fetch", { networkEndpoints: ["*"], dataCategories: ["text"] }],
+  ["memory_search", { dataCategories: ["text", "metadata"] }],
+  ["memory_get", { dataCategories: ["text", "metadata"] }],
+]);
+
+/** Runtime scope overrides registered by plugins. */
+const runtimeScopeOverrides = new Map<string, ToolAccessScope>();
+
+/** Register a scope override for a tool at runtime (plugins). */
+export function registerToolScope(
+  toolName: string,
+  scope: ToolAccessScope,
+): void {
+  runtimeScopeOverrides.set(toolName, scope);
+}
+
+/** Remove a runtime scope override. */
+export function unregisterToolScope(toolName: string): void {
+  runtimeScopeOverrides.delete(toolName);
+}
+
+/**
+ * Get the declared access scope for a tool.
+ * Returns undefined if the tool has no declared scope.
+ *
+ * Priority: runtime override > static TOOL_SCOPE_MAP.
+ */
+export function getToolScope(toolName: string): ToolAccessScope | undefined {
+  return runtimeScopeOverrides.get(toolName) ?? TOOL_SCOPE_MAP.get(toolName);
+}
+
+/**
+ * Get the full scope map (for debugging / status display).
+ */
+export function getScopeMap(): ReadonlyMap<string, ToolAccessScope> {
+  const merged = new Map(TOOL_SCOPE_MAP);
+  for (const [name, scope] of runtimeScopeOverrides) {
+    merged.set(name, scope);
   }
   return merged;
 }
